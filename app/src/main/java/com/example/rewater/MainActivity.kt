@@ -1,6 +1,8 @@
 package com.example.rewater
 
 import android.annotation.SuppressLint
+import android.content.Context
+import android.content.SharedPreferences
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -22,41 +24,77 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.example.rewater.ui.theme.ReWaterTheme
 
 class MainActivity : ComponentActivity() {
+    private lateinit var sharedPreferences: SharedPreferences
+    private lateinit var editor: SharedPreferences.Editor
+
+    private var counter by mutableIntStateOf(0)
+    private var isAwake by mutableStateOf(true)
+    private var lastNotificationTime by mutableLongStateOf(0L)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            ReWaterApp()
+            ReWaterApp(counter = counter,
+                isAwake = isAwake,
+                onCounterChange = { newCounter ->
+                    counter = newCounter
+                    savePreferences(counter, isAwake, lastNotificationTime)
+                },
+                onAwakeStateChange = { newAwakeState ->
+                    isAwake = newAwakeState
+                    savePreferences(counter, isAwake, lastNotificationTime)
+                }
+            )
         }
+
+        sharedPreferences = getSharedPreferences("ReWaterPrefs", Context.MODE_PRIVATE)
+        editor = sharedPreferences.edit()
+
+        loadPreferences()
+
+        updateUI()
+    }
+
+    private fun savePreferences(counter: Int, isAwake: Boolean, lastNotificationTime: Long) {
+        editor.putInt("counter", counter)
+        editor.putBoolean("isAwake", isAwake)
+        editor.putLong("lastNotificationTime", lastNotificationTime)
+        editor.apply()
+    }
+
+    private fun loadPreferences() {
+        counter = sharedPreferences.getInt("counter", 0)
+        isAwake = sharedPreferences.getBoolean("isAwake", true)
+        lastNotificationTime = sharedPreferences.getLong("lastNotificationTime", 0L)
+    }
+
+    private fun updateUI() {
+
     }
 }
 
-@SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ReWaterApp() {
-    var counter by remember { mutableIntStateOf(0) }
-    var isAwake by remember { mutableStateOf(true) }
-
+fun ReWaterApp(counter: Int, isAwake: Boolean, onCounterChange: (Int) -> Unit, onAwakeStateChange: (Boolean) -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(title = { Text("ReWater") })
         }
-    ) {
+    ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp),
+                .padding(paddingValues),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -70,10 +108,10 @@ fun ReWaterApp() {
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Button(onClick = { if (counter > 0) counter-- }) {
+                Button(onClick = { if (counter > 0) onCounterChange(counter - 1) }) {
                     Text("Drank Water (-)")
                 }
-                Button(onClick = { counter++ }) {
+                Button(onClick = { onCounterChange(counter + 1) }) {
                     Text("Missed Reminder (+)")
                 }
             }
@@ -86,10 +124,11 @@ fun ReWaterApp() {
                 Text("Awake State: ")
                 Switch(
                     checked = isAwake,
-                    onCheckedChange = { isAwake = it }
+                    onCheckedChange = { onAwakeStateChange(it) }
                 )
                 Text(if (isAwake) "Awake" else "Asleep")
             }
         }
     }
 }
+
